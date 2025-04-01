@@ -2,8 +2,6 @@ import vision from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3"
 const { FaceLandmarker, FilesetResolver, DrawingUtils } = vision;
 
 let faceLandmarker;
-let webcamRunning = false;
-let runningMode = "VIDEO";
 
 async function createFaceLandmarker() {
     const filesetResolver = await FilesetResolver.forVisionTasks(
@@ -15,7 +13,7 @@ async function createFaceLandmarker() {
             delegate: "GPU"
         },
         outputFaceBlendshapes: true,
-        runningMode,
+        runningMode: "VIDEO",
         numFaces: 1
     });
 }
@@ -34,6 +32,7 @@ function enableCam() {
             video.srcObject = stream;
             video.onloadedmetadata = () => {
                 video.play();
+                video.addEventListener("loadeddata", predictWebcam);
             };
         })
         .catch((err) => {
@@ -41,3 +40,37 @@ function enableCam() {
         });
 }
 enableCam();
+
+async function predictWebcam() {
+    if (!faceLandmarker) {
+        requestAnimationFrame(predictWebcam);
+        return;
+    }
+
+    const canvas = document.getElementById("output");
+    const ctx = canvas.getContext("2d");
+    
+    const video = document.getElementById("video");
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const results = faceLandmarker.detectForVideo(video, performance.now());
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    if (results.faceLandmarks) {
+        const drawingUtils = new DrawingUtils(ctx);
+        for (const landmarks of results.faceLandmarks) {
+            drawingUtils.drawConnectors(
+                landmarks,
+                FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+                { color: "#C0C0C070", lineWidth: 1 }
+            );
+        }
+    }
+    requestAnimationFrame(predictWebcam);
+}
+
+
