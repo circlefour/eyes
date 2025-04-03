@@ -66,17 +66,12 @@ async function predictWebcam() {
 
     const results = faceLandmarker.detectForVideo(video, performance.now());
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
     if (results.faceLandmarks) {
         const drawingUtils = new DrawingUtils(ctx);
         for (const landmarks of results.faceLandmarks) {
-            //drawingUtils.drawConnectors(
-            //    landmarks,
-            //    FaceLandmarker.FACE_LANDMARKS_TESSELATION,
-            //    { color: "#C0C0C070", lineWidth: 1 }
-            //);
             drawingUtils.drawConnectors(
                 landmarks,
                 FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
@@ -87,13 +82,25 @@ async function predictWebcam() {
                 FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
                 { color: "#FF3030", lineWidth: 1 }
             );
-            //console.log(FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE);
-            //console.log(FaceLandmarker);
-            console.log(landmarks);
-            console.log(results);
-            console.log(FaceLandmarker.FACE_LANDMARKS_LEFT_EYE);
-            //const rightEyeIndices = results.FACE_LANDMARKS_RIGHT_EYE.map(landmark => landmark.index);
-            //console.log(rightEyeIndices);
+            
+            FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE.forEach(({ start }) => {
+                console.log("landmarks: ", landmarks);
+                console.log("index: ", start);
+                const landmark = landmarks[start];
+                const x = landmark.x * video.videoWidth;
+                const y = landmark.y * video.videoHeight;
+
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            });
+
+            const eyeWidth = maxX - minX;
+            const eyeHeight = maxY - minY;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, minX, minY, eyeWidth, eyeHeight, 0, 0, eyeWidth*10, eyeHeight*10);
+
             const rightEyeCoords = FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE.map(({ start }) => landmarks[start]);
             console.log("right eye coordinates: ", rightEyeCoords);
 
@@ -102,6 +109,7 @@ async function predictWebcam() {
                 y: pt.y * canvas.height
             }));
             console.log("right eye pixels: ", rightEyePixels);
+
         }
     }
     requestAnimationFrame(predictWebcam);
