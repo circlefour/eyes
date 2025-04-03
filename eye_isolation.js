@@ -66,56 +66,32 @@ async function predictWebcam() {
 
     const results = faceLandmarker.detectForVideo(video, performance.now());
 
-
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
     if (results.faceLandmarks) {
         const drawingUtils = new DrawingUtils(ctx);
+
         for (const landmarks of results.faceLandmarks) {
-            drawingUtils.drawConnectors(
-                landmarks,
-                FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-                { color: "#FF3030", lineWidth: 1 }
-            );
-            drawingUtils.drawConnectors(
-                landmarks,
-                FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-                { color: "#FF3030", lineWidth: 1 }
-            );
-            
-            FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE.forEach(({ start }) => {
-                console.log("landmarks: ", landmarks);
-                console.log("index: ", start);
-                const landmark = landmarks[start];
-                const x = landmark.x * video.videoWidth;
-                const y = landmark.y * video.videoHeight;
-
-                minX = Math.min(minX, x);
-                maxX = Math.max(maxX, x);
-                minY = Math.min(minY, y);
-                maxY = Math.max(maxY, y);
-            });
-
-            const eyeWidth = maxX - minX;
-            const eyeHeight = maxY - minY;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            //ctx.drawImage(video, minX, minY, eyeWidth, eyeHeight, 0, 0, eyeWidth*10, eyeHeight*10);
-
-            const rightEyeCoords = FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE.map(({ start }) => landmarks[start]);
-            console.log("right eye coordinates: ", rightEyeCoords);
-
-
-            const rightEyePixels = rightEyeCoords.map(pt => ({
-                x: pt.x * canvas.width,
-                y: pt.y * canvas.height
-            }));
-            console.log("right eye pixels: ", rightEyePixels);
-
+            
+            const rightEyePixels = getPxTrace(FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, landmarks, canvas.width, canvas.height);
             drawEye(video, canvas, rightEyePixels);
+
+            const leftEyePixels = getPxTrace(FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, landmarks, canvas.width, canvas.height);
+            drawEye(video, canvas, leftEyePixels);
 
         }
     }
     requestAnimationFrame(predictWebcam);
+}
+
+function getPxTrace(featureLandmarks, faceLandmarks, width, height) {
+    const coords = featureLandmarks.map(({ start }) => faceLandmarks[start]);
+    const pixelLoc = coords.map(pt => ({
+        x: pt.x * width,
+        y: pt.y * height
+    }));
+    return pixelLoc;
 }
 
 function drawEye(image, canvas, eyeLandmarks) {
@@ -128,8 +104,19 @@ function drawEye(image, canvas, eyeLandmarks) {
     ctx.moveTo(eyeLandmarks[0].x, eyeLandmarks[0].y);
     console.log(`first landmarks are at ${eyeLandmarks[0].x} and ${eyeLandmarks[0].y}`);
     console.log(`last landmarks are at ${eyeLandmarks[eyeLandmarks.length - 1].x} and ${eyeLandmarks[eyeLandmarks.length - 1].y}`);
-    for (const landmark of eyeLandmarks) {
-        ctx.lineTo(landmark.x, landmark.y);
+    //for (const landmark of eyeLandmarks) {
+    //    ctx.lineTo(landmark.x, landmark.y);
+    //    ctx.fillRect(landmark.x, landmark.y,1,1);
+    //}
+
+    // specific to this model i think, not sure how coordinates are mapped in other models
+    for (let i = 1; i < eyeLandmarks.length/2; i++){
+        ctx.lineTo(eyeLandmarks[i].x, eyeLandmarks[i].y);
+        //ctx.fillText(i, eyeLandmarks[i].x, eyeLandmarks[i].y);
+    }
+    for (let i = eyeLandmarks.length-1; i > eyeLandmarks.length/2; i--) {
+        ctx.lineTo(eyeLandmarks[i].x, eyeLandmarks[i].y);
+        //ctx.fillText(i, eyeLandmarks[i].x, eyeLandmarks[i].y);
     }
     ctx.closePath();
     ctx.clip();
