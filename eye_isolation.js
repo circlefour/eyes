@@ -99,10 +99,11 @@ async function predictWebcam() {
             const eyeWidth = maxX - minX;
             const eyeHeight = maxY - minY;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(video, minX, minY, eyeWidth, eyeHeight, 0, 0, eyeWidth*10, eyeHeight*10);
+            //ctx.drawImage(video, minX, minY, eyeWidth, eyeHeight, 0, 0, eyeWidth*10, eyeHeight*10);
 
             const rightEyeCoords = FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE.map(({ start }) => landmarks[start]);
             console.log("right eye coordinates: ", rightEyeCoords);
+
 
             const rightEyePixels = rightEyeCoords.map(pt => ({
                 x: pt.x * canvas.width,
@@ -110,9 +111,32 @@ async function predictWebcam() {
             }));
             console.log("right eye pixels: ", rightEyePixels);
 
+            drawEye(video, canvas, rightEyePixels);
+
         }
     }
     requestAnimationFrame(predictWebcam);
+}
+
+function drawEye(image, canvas, eyeLandmarks) {
+    console.log('canvas: ', canvas);
+    console.log('image: ', image);
+    console.log('eye landmarks: ', eyeLandmarks);
+    const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(eyeLandmarks[0].x, eyeLandmarks[0].y);
+    console.log(`first landmarks are at ${eyeLandmarks[0].x} and ${eyeLandmarks[0].y}`);
+    console.log(`last landmarks are at ${eyeLandmarks[eyeLandmarks.length - 1].x} and ${eyeLandmarks[eyeLandmarks.length - 1].y}`);
+    for (const landmark of eyeLandmarks) {
+        ctx.lineTo(landmark.x, landmark.y);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    ctx.restore();
 }
 
 document.getElementById("enable").addEventListener("click", enableCam);
