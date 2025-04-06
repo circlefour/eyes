@@ -60,29 +60,101 @@ async function predictWebcam() {
     const ctx = canvas.getContext("2d");
     
     const video = document.getElementById("video");
+    //console.log('video width: ', video.videoWidth);
 
+    // this matches the width and height of the video stream's native resolution: default camera settings
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    const results = faceLandmarker.detectForVideo(video, performance.now());
+    // video element display size
+    //canvas.width = video.clientWidth;
+    //canvas.height = video.clientHeight;
 
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    const results = faceLandmarker.detectForVideo(video, performance.now());
 
     if (results.faceLandmarks) {
         const drawingUtils = new DrawingUtils(ctx);
 
         for (const landmarks of results.faceLandmarks) {
+            let src, dest;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             const rightEyePixels = getPxTrace(FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, landmarks, canvas.width, canvas.height);
-            drawEye(video, canvas, rightEyePixels);
+            src = { "x": 0, "y": 0, "width": canvas.width, "height": canvas.height };
+            drawEye(video, canvas, rightEyePixels, src, src);
 
             const leftEyePixels = getPxTrace(FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, landmarks, canvas.width, canvas.height);
-            drawEye(video, canvas, leftEyePixels);
+            drawEye(video, canvas, leftEyePixels, src, src);
+
+            // test
+            const bounds = getBounds(leftEyePixels);
+            //console.log("logging bounds: ", bounds);
+            drawToTemp(bounds, video);
+            let x = 0, y = 0;
+            const newShift = shift(x, y, leftEyePixels, bounds);
+            src = { "x": 0, "y": 0, "width": temp.width, "height": temp.height };
+            dest = {"x": x, "y": y, "width": temp.width, "height": temp.height };
+            drawEye(temp, canvas, newShift, src, dest);
 
         }
     }
     requestAnimationFrame(predictWebcam);
+}
+
+function getBounds(pixelLoc) {
+    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+    pixelLoc.forEach((element) => {
+        xMin = Math.min(xMin, element.x);
+        xMax = Math.max(xMax, element.x);
+        yMin = Math.min(yMin, element.y);
+        yMax = Math.max(yMax, element.y);
+    });
+
+    // i want to get top corner, width and height
+    // top corner : xmin, ymin
+    // width = xmax-xmin, height = ymax-ymin
+
+    const bounds = {
+        "xmin": xMin,
+        "ymin": yMin,
+        "xmax": xMax,
+        "ymax": yMax
+    }
+
+    return bounds;
+}
+
+// this is actually interesting af because it just shifts the contour, but it doesn't redraw the pixels associated with the eye there. so basically, it uncovers from whatever is in the frame in the shape of the eye.
+function shift(x, y, pixelLoc, eyeBounds) {
+    // new location - old location = shift ammount
+    const xshift = x - eyeBounds.xmin;
+    const yshift = y - eyeBounds.ymin;
+
+    return pixelLoc.map(px => ({
+        x: px.x + xshift,
+        y: px.y + yshift
+    }));
+}
+
+const temp = document.createElement('canvas');
+const tempCtx = temp.getContext('2d');
+
+function drawToTemp(bounds, video) {
+    const eyeWidth  = bounds.xmax - bounds.xmin;
+    const eyeHeight = bounds.ymax - bounds.ymin;
+
+    // honestly negligible performance improvement, like eye size is prolly gonna be changing a lot
+    if (temp.width !== eyeWidth || temp.height !== eyeHeight) {
+        temp.width = eyeWidth;
+        temp.height = eyeHeight;
+    } else {
+        tempCtx.clearRect(0, 0, eyeWidth, eyeHeight);
+    }
+
+    tempCtx.drawImage(video,
+        bounds.xmin, bounds.ymin, temp.width, temp.height,
+        0, 0, temp.width, temp.height);
 }
 
 function getPxTrace(featureLandmarks, faceLandmarks, width, height) {
@@ -94,20 +166,11 @@ function getPxTrace(featureLandmarks, faceLandmarks, width, height) {
     return pixelLoc;
 }
 
-function drawEye(image, canvas, eyeLandmarks) {
-    console.log('canvas: ', canvas);
-    console.log('image: ', image);
-    console.log('eye landmarks: ', eyeLandmarks);
+function drawEye(image, canvas, eyeLandmarks, src, dest) {
     const ctx = canvas.getContext("2d");
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(eyeLandmarks[0].x, eyeLandmarks[0].y);
-    console.log(`first landmarks are at ${eyeLandmarks[0].x} and ${eyeLandmarks[0].y}`);
-    console.log(`last landmarks are at ${eyeLandmarks[eyeLandmarks.length - 1].x} and ${eyeLandmarks[eyeLandmarks.length - 1].y}`);
-    //for (const landmark of eyeLandmarks) {
-    //    ctx.lineTo(landmark.x, landmark.y);
-    //    ctx.fillRect(landmark.x, landmark.y,1,1);
-    //}
 
     // specific to this model i think, not sure how coordinates are mapped in other models
     for (let i = 1; i < eyeLandmarks.length/2; i++){
@@ -121,7 +184,9 @@ function drawEye(image, canvas, eyeLandmarks) {
     ctx.closePath();
     ctx.clip();
 
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image,
+        src.x, src.y, src.width, src.height,
+        dest.x, dest.y, dest.width, dest.height);
 
     ctx.restore();
 }
